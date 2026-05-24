@@ -4,15 +4,17 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 
-class UserCreate(BaseModel):
-    username: str = Field(min_length=2, max_length=64)
-    password: str = Field(min_length=6)
+class WeiboLoginRequest(BaseModel):
+    access_token: str | None = None
 
 
 class UserOut(BaseModel):
     id: int
     username: str
-    email: str
+    display_name: str
+    role: str
+    auth_provider: str
+    is_guest: bool
     created_at: datetime
 
     class Config:
@@ -22,6 +24,15 @@ class UserOut(BaseModel):
 class Token(BaseModel):
     access_token: str
     token_type: str = "bearer"
+    user: UserOut
+
+
+class ProfileUpdate(BaseModel):
+    display_name: str = Field(min_length=1, max_length=64)
+
+
+class InviteUpgradeRequest(BaseModel):
+    invite_code: str = Field(min_length=1, max_length=64)
 
 
 class PaletteColor(BaseModel):
@@ -155,3 +166,84 @@ class BatchOut(BaseModel):
     id: int
     project_id: int
     results: list[RenderResultOut]
+
+
+class WorkCreate(BaseModel):
+    result_id: int
+    title: str = Field(min_length=1, max_length=160)
+    description: str | None = Field(default=None, max_length=4000)
+
+
+class WorkOut(BaseModel):
+    id: int
+    user_id: int
+    author_name: str
+    title: str
+    description: str | None
+    image_url: str
+    like_count: int
+    comment_count: int
+    status: str
+    removed_reason: str | None
+    created_at: datetime
+    is_liked: bool = False
+
+
+class CommentCreate(BaseModel):
+    content: str = Field(min_length=1, max_length=2000)
+
+
+class CommentOut(BaseModel):
+    id: int
+    work_id: int
+    user_id: int
+    author_name: str
+    content: str
+    status: str
+    removed_reason: str | None
+    created_at: datetime
+
+
+class NotificationOut(BaseModel):
+    id: int
+    category: str
+    title: str
+    content: str
+    related_type: str | None
+    related_id: int | None
+    created_at: datetime
+    is_read: bool
+
+
+class AnnouncementCreate(BaseModel):
+    title: str = Field(min_length=1, max_length=160)
+    content: str = Field(min_length=1, max_length=5000)
+
+
+class AnnouncementOut(BaseModel):
+    id: int
+    admin_user_id: int
+    title: str
+    content: str
+    created_at: datetime
+
+
+class LeaderboardItem(BaseModel):
+    user_id: int
+    display_name: str
+    likes: int
+
+
+class ModerateRequest(BaseModel):
+    reason: str = Field(min_length=5, max_length=4000)
+
+
+class ModerationLogOut(BaseModel):
+    id: int
+    admin_user_id: int
+    target_user_id: int
+    target_type: str
+    target_id: int
+    action: str
+    reason: str
+    created_at: datetime

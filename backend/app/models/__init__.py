@@ -1,10 +1,17 @@
 from app.models.models import (
+    Announcement,
     Export,
+    InviteCode,
+    ModerationLog,
+    Notification,
     Palette,
     Project,
     RenderBatch,
     RenderResult,
     User,
+    Work,
+    WorkComment,
+    WorkLike,
 )
 
 __all__ = [
@@ -14,4 +21,11 @@ __all__ = [
     "RenderBatch",
     "RenderResult",
     "Export",
+    "Work",
+    "WorkComment",
+    "WorkLike",
+    "Notification",
+    "Announcement",
+    "ModerationLog",
+    "InviteCode",
 ]

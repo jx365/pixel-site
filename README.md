@@ -1,13 +1,16 @@
 # 像素画生成网站
 
-全栈像素画工具：色盘制作、照片预处理、参数化像素化、批量预览、Excel 导出（色号格子 + 色卡对照表）。
+全栈像素画工具：色盘制作、照片预处理、参数化像素化、批量预览、Excel 导出、社区发布与互动。
 
 ## 功能
 
-- **色盘**：上传 1~n 张色盘图提取颜色，**三档提取强度**（保守/平衡/高保真），勾选排序，自定义色号
+- **色盘**：上传 1~n 张色盘图提取颜色，支持**三档提取强度**（保守/平衡/高保真）、手动 RGB/Hex 添加、文本/Excel 粘贴批量导入
 - **生成**：上传照片、裁剪、选色盘、设置画布 H×W、预处理预览、渲染参数
 - **批量预览**：多参数组合小图预览（最多 50 组）
 - **Excel**：双 Sheet（像素画彩色格子 + 色卡对照表），样式与 xlsxwriter 参考实现一致
+- **账号**：仅保留游客模式（微博登录暂为占位），游客可修改临时昵称并隔离存储
+- **社区**：作品发布、评论、点赞、消息中心、公告、点赞排行榜
+- **治理**：邀请码升级管理员、下架作品/评论需填写违规理由并通知当事人
 
 ## 技术栈
 
@@ -37,8 +40,9 @@ npm run dev
 
 浏览器打开 http://localhost:5173
 
-1. 注册账号
+1. 游客进入并设置昵称
 2. 创建色盘 → 上传照片生成 → 下载 Excel
+3. 在结果页发布到社区，参与评论点赞
 
 ## 环境变量（可选）
 
@@ -47,6 +51,10 @@ npm run dev
 ```
 SECRET_KEY=your-secret-key
 DATABASE_URL=sqlite:///./pixel_art.db
+CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
+GUEST_DAILY_WORK_LIMIT=1
+GUEST_DAILY_EXPORT_LIMIT=10
+ADMIN_INVITE_CODE=HUASHI-ADMIN-2026
 ```
 
 ## 生产化部署（多人局域网/内网使用）
@@ -88,9 +96,17 @@ docker compose ps          # 查看状态
 docker compose logs -f api # 查看后端日志
 docker compose down        # 停止
 docker compose up -d       # 后台启动（已 build 后）
+.\scripts\backup_data.ps1  # 备份数据库和上传文件
+.\scripts\check_health.ps1 -ApiUrl http://127.0.0.1:8000 -PublicApiUrl https://your-api-domain
 ```
 
 数据持久化在 Docker 卷：`pixel_data`（数据库）、`pixel_uploads`（上传图片）。
+
+Linux/macOS 可用：
+
+```bash
+./scripts/backup_data.sh
+```
 
 ### 5. 与开发模式的区别
 
@@ -120,6 +136,13 @@ docker compose up --build
 ## API 文档
 
 后端启动后访问 http://127.0.0.1:8000/docs
+
+## 社区与角色规则
+
+- 角色：`guest`（游客）、`user`（微博关联后预留）、`admin`（邀请码升级）
+- 游客限制：每天最多发布 `GUEST_DAILY_WORK_LIMIT` 个作品、导出 `GUEST_DAILY_EXPORT_LIMIT` 个 Excel
+- 管理员可发布公告、下架违规作品/评论；下架时填写理由并写入审计记录
+- 消息中心默认展示未读消息，阅读后可一键清空
 
 ## 一键端到端自测
 

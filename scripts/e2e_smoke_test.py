@@ -4,7 +4,7 @@ Pixel Art Site end-to-end smoke test.
 
 What this script does:
 1) Ensures backend is running (starts uvicorn if needed)
-2) Register + login
+2) Start guest session
 3) Extract palette colors from generated test images
 4) Create palette
 5) Create project with uploaded source image
@@ -197,10 +197,6 @@ def start_backend_if_needed() -> tuple[subprocess.Popen[str] | None, bool]:
 
 def run_smoke_test() -> list[StepResult]:
     results: list[StepResult] = []
-    suffix = "".join(random.choice(string.ascii_lowercase + string.digits) for _ in range(8))
-    username = f"smoke_{suffix}"
-    password = "smoke123"
-
     def add_step(name: str, ok: bool, detail: str = "") -> None:
         icon = "PASS" if ok else "FAIL"
         log(f"[{icon}] {name}{' - ' + detail if detail else ''}")
@@ -213,21 +209,10 @@ def run_smoke_test() -> list[StepResult]:
     data = json.loads(body.decode("utf-8"))
     add_step("Health check", status == 200 and data.get("status") == "ok", str(data))
 
-    # 2. Register
-    try:
-        status, reg_data, _ = request_json(
-            "POST",
-            "/api/auth/register",
-            {"username": username, "password": password},
-        )
-        add_step("Register", status == 200 and reg_data.get("username") == username)
-    except HTTPError as e:
-        add_step("Register", False, f"HTTP {e.code}")
-
-    # 3. Login
-    status, login_data, _ = request_form("/api/auth/login", {"username": username, "password": password})
+    # 2. Guest login
+    status, login_data, _ = request_json("POST", "/api/auth/guest")
     token = login_data.get("access_token")
-    add_step("Login", status == 200 and isinstance(token, str) and len(token) > 20)
+    add_step("Guest login", status == 200 and isinstance(token, str) and len(token) > 20)
     auth_headers = {"Authorization": f"Bearer {token}"}
 
     # 4. Extract palette candidates

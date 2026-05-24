@@ -3,7 +3,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
-from app.auth import get_current_or_guest_user
+from app.auth import get_current_user
 from app.database import get_db
 from app.models import Palette, User
 from app.schemas import ExtractResponse, PaletteCreate, PaletteOut, PaletteUpdate
@@ -24,7 +24,7 @@ def _to_out(p: Palette) -> PaletteOut:
 
 @router.post("/extract", response_model=ExtractResponse)
 async def extract_colors(
-    user: Annotated[User, Depends(get_current_or_guest_user)],
+    user: Annotated[User, Depends(get_current_user)],
     files: list[UploadFile] = File(...),
     quality: str = Form("balanced"),
 ):
@@ -49,7 +49,7 @@ async def extract_colors(
 
 
 @router.get("", response_model=list[PaletteOut])
-def list_palettes(user: Annotated[User, Depends(get_current_or_guest_user)], db: Annotated[Session, Depends(get_db)]):
+def list_palettes(user: Annotated[User, Depends(get_current_user)], db: Annotated[Session, Depends(get_db)]):
     items = db.query(Palette).filter(Palette.user_id == user.id).order_by(Palette.created_at.desc()).all()
     return [_to_out(p) for p in items]
 
@@ -57,7 +57,7 @@ def list_palettes(user: Annotated[User, Depends(get_current_or_guest_user)], db:
 @router.post("", response_model=PaletteOut)
 def create_palette(
     body: PaletteCreate,
-    user: Annotated[User, Depends(get_current_or_guest_user)],
+    user: Annotated[User, Depends(get_current_user)],
     db: Annotated[Session, Depends(get_db)],
 ):
     if not body.colors:
@@ -72,7 +72,7 @@ def create_palette(
 @router.get("/{palette_id}", response_model=PaletteOut)
 def get_palette(
     palette_id: int,
-    user: Annotated[User, Depends(get_current_or_guest_user)],
+    user: Annotated[User, Depends(get_current_user)],
     db: Annotated[Session, Depends(get_db)],
 ):
     p = db.get(Palette, palette_id)
@@ -85,7 +85,7 @@ def get_palette(
 def update_palette(
     palette_id: int,
     body: PaletteUpdate,
-    user: Annotated[User, Depends(get_current_or_guest_user)],
+    user: Annotated[User, Depends(get_current_user)],
     db: Annotated[Session, Depends(get_db)],
 ):
     p = db.get(Palette, palette_id)
@@ -103,7 +103,7 @@ def update_palette(
 @router.delete("/{palette_id}")
 def delete_palette(
     palette_id: int,
-    user: Annotated[User, Depends(get_current_or_guest_user)],
+    user: Annotated[User, Depends(get_current_user)],
     db: Annotated[Session, Depends(get_db)],
 ):
     p = db.get(Palette, palette_id)

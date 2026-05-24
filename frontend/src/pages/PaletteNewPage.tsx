@@ -10,6 +10,28 @@ const QUALITY_OPTIONS: { value: ExtractQuality; label: string; hint: string }[] 
   { value: "high_fidelity", label: "高保真", hint: "保留更多颜色，适合 50+ 色的复杂色盘图" },
 ];
 
+function clampColor(v: number): number {
+  if (Number.isNaN(v)) return 0;
+  return Math.max(0, Math.min(255, Math.round(v)));
+}
+
+function parseHexToRgb(hexRaw: string): { r: number; g: number; b: number } | null {
+  const hex = hexRaw.trim().replace(/^#/, "");
+  if (!/^[0-9a-fA-F]{6}$/.test(hex)) return null;
+  return {
+    r: parseInt(hex.slice(0, 2), 16),
+    g: parseInt(hex.slice(2, 4), 16),
+    b: parseInt(hex.slice(4, 6), 16),
+  };
+}
+
+function toHex(r: number, g: number, b: number): string {
+  return `#${[r, g, b]
+    .map((v) => clampColor(v).toString(16).padStart(2, "0"))
+    .join("")
+    .toUpperCase()}`;
+}
+
 export default function PaletteNewPage() {
   const navigate = useNavigate();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -17,6 +39,12 @@ export default function PaletteNewPage() {
   const [name, setName] = useState("我的色盘");
   const [quality, setQuality] = useState<ExtractQuality>("high_fidelity");
   const [colors, setColors] = useState<SelectedColor[]>([]);
+  const [manualLabel, setManualLabel] = useState("");
+  const [manualHex, setManualHex] = useState("#");
+  const [manualR, setManualR] = useState(0);
+  const [manualG, setManualG] = useState(0);
+  const [manualB, setManualB] = useState(0);
+  const [bulkText, setBulkText] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -74,6 +102,74 @@ export default function PaletteNewPage() {
       [copy[idx], copy[next]] = [copy[next], copy[idx]];
       return copy.map((c, i) => ({ ...c, sort: i + 1 }));
     });
+  };
+
+  const addColor = (label: string, r: number, g: number, b: number) => {
+    setColors((prev) => [
+      ...prev,
+      {
+        sort: prev.length + 1,
+        label: label || String(prev.length + 1),
+        r: clampColor(r),
+        g: clampColor(g),
+        b: clampColor(b),
+        selected: true,
+      },
+    ]);
+  };
+
+  const addManualColor = () => {
+    const parsed = parseHexToRgb(manualHex);
+    if (!parsed) {
+      setError("手动颜色 Hex 格式需为 #RRGGBB");
+      return;
+    }
+    addColor(manualLabel.trim(), parsed.r, parsed.g, parsed.b);
+    setManualLabel("");
+    setError("");
+  };
+
+  const importBulkColors = () => {
+    const lines = bulkText
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .filter(Boolean);
+    if (!lines.length) {
+      setError("请先粘贴要导入的颜色数据");
+      return;
+    }
+
+    const parsedRows: Array<{ label: string; r: number; g: number; b: number }> = [];
+    for (const line of lines) {
+      const csv = line.split(/[,\t，]/).map((x) => x.trim());
+      if (csv.length >= 3 && /^\d+$/.test(csv[csv.length - 3]) && /^\d+$/.test(csv[csv.length - 2]) && /^\d+$/.test(csv[csv.length - 1])) {
+        const maybeLabel = csv.length > 3 ? csv.slice(0, csv.length - 3).join("_") : "";
+        parsedRows.push({
+          label: maybeLabel,
+          r: Number(csv[csv.length - 3]),
+          g: Number(csv[csv.length - 2]),
+          b: Number(csv[csv.length - 1]),
+        });
+        continue;
+      }
+      const hexOnly = parseHexToRgb(csv[csv.length - 1] || line);
+      if (hexOnly) {
+        const maybeLabel = csv.length > 1 ? csv[0] : "";
+        parsedRows.push({
+          label: maybeLabel,
+          r: hexOnly.r,
+          g: hexOnly.g,
+          b: hexOnly.b,
+        });
+        continue;
+      }
+      setError(`无法解析该行：${line}`);
+      return;
+    }
+
+    parsedRows.forEach((row) => addColor(row.label, row.r, row.g, row.b));
+    setBulkText("");
+    setError("");
   };
 
   const save = async () => {
@@ -156,6 +252,89 @@ export default function PaletteNewPage() {
         {error && <p className="error">{error}</p>}
       </div>
 
+      <div className="card" style={{ marginBottom: "1rem" }}>
+        <h3 style={{ marginTop: 0 }}>手动添加颜色</h3>
+        <div className="grid-2">
+          <div className="form-group">
+            <label>色号（可选）</label>
+            <input value={manualLabel} onChange={(e) => setManualLabel(e.target.value)} placeholder="如 A12 / SKY_BLUE" />
+          </div>
+          <div className="form-group">
+            <label>Hex</label>
+            <input
+              value={manualHex}
+              onChange={(e) => {
+                const value = e.target.value.trim();
+                setManualHex(value.startsWith("#") ? value : `#${value}`);
+                const parsed = parseHexToRgb(value);
+                if (parsed) {
+                  setManualR(parsed.r);
+                  setManualG(parsed.g);
+                  setManualB(parsed.b);
+                }
+              }}
+              placeholder="#RRGGBB"
+            />
+          </div>
+        </div>
+        <div className="grid-2">
+          <div className="form-group">
+            <label>R</label>
+            <input type="number" min={0} max={255} value={manualR} onChange={(e) => setManualR(clampColor(Number(e.target.value)))} />
+          </div>
+          <div className="form-group">
+            <label>G</label>
+            <input type="number" min={0} max={255} value={manualG} onChange={(e) => setManualG(clampColor(Number(e.target.value)))} />
+          </div>
+        </div>
+        <div className="grid-2">
+          <div className="form-group">
+            <label>B</label>
+            <input type="number" min={0} max={255} value={manualB} onChange={(e) => setManualB(clampColor(Number(e.target.value)))} />
+          </div>
+          <div className="form-group">
+            <label>RGB 转 Hex 预览</label>
+            <input value={toHex(manualR, manualG, manualB)} readOnly />
+          </div>
+        </div>
+        <div className="actions">
+          <button
+            type="button"
+            className="secondary"
+            onClick={() => {
+              const hex = toHex(manualR, manualG, manualB);
+              setManualHex(hex);
+              addColor(manualLabel.trim(), manualR, manualG, manualB);
+              setManualLabel("");
+            }}
+          >
+            按 RGB 添加
+          </button>
+          <button type="button" onClick={addManualColor}>
+            按 Hex 添加
+          </button>
+        </div>
+      </div>
+
+      <div className="card" style={{ marginBottom: "1rem" }}>
+        <h3 style={{ marginTop: 0 }}>批量导入（文本/Excel 粘贴）</h3>
+        <p style={{ color: "var(--muted)", marginTop: 0 }}>
+          支持格式：`label,r,g,b` 或 `label,#RRGGBB` 或仅 `#RRGGBB`；支持逗号/制表符分隔。
+        </p>
+        <textarea
+          value={bulkText}
+          onChange={(e) => setBulkText(e.target.value)}
+          rows={8}
+          style={{ width: "100%", resize: "vertical" }}
+          placeholder={"A1,255,0,0\nA2,#00FF00\n#112233"}
+        />
+        <div className="actions">
+          <button type="button" className="secondary" onClick={importBulkColors}>
+            导入并追加颜色
+          </button>
+        </div>
+      </div>
+
       {colors.length > 0 && (
         <>
           <p style={{ color: "var(--muted)", marginBottom: "0.75rem" }}>
@@ -172,7 +351,7 @@ export default function PaletteNewPage() {
                 title="色号"
               />
               <span style={{ fontFamily: "var(--mono)", fontSize: "0.85rem", color: "var(--muted)" }}>
-                {c.r},{c.g},{c.b}
+                {c.r},{c.g},{c.b} / {toHex(c.r, c.g, c.b)}
               </span>
               <button type="button" className="secondary" onClick={() => move(i, -1)} disabled={i === 0}>
                 ↑

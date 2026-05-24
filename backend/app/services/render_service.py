@@ -19,8 +19,10 @@ def _load_cropped_image(project: Project) -> Image.Image:
     if project.crop_json:
         crop = json.loads(project.crop_json)
         w, h = img.size
-        x, y = int(crop["x"] * w), int(crop["y"] * h)
-        cw, ch = int(crop["w"] * w), int(crop["h"] * h)
+        x, y = int(max(0, min(1, crop["x"])) * w), int(max(0, min(1, crop["y"])) * h)
+        cw, ch = int(max(0.001, min(1, crop["w"])) * w), int(max(0.001, min(1, crop["h"])) * h)
+        cw = max(1, min(cw, w - x))
+        ch = max(1, min(ch, h - y))
         img = img.crop((x, y, x + cw, y + ch))
     return img
 

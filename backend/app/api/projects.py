@@ -6,7 +6,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
-from app.auth import get_current_or_guest_user
+from app.auth import get_current_user
 from app.config import settings
 from app.database import get_db
 from app.models import Export, Palette, Project, RenderBatch, RenderResult, User
@@ -14,6 +14,7 @@ from app.schemas import (
     BatchOut,
     BatchRequest,
     PreprocessParams,
+    CropRect,
     ProjectCreate,
     ProjectOut,
     ProjectUpdate,
@@ -53,7 +54,7 @@ def _get_project(db: Session, user: User, project_id: int) -> Project:
 
 @router.post("", response_model=ProjectOut)
 async def create_project(
-    user: Annotated[User, Depends(get_current_or_guest_user)],
+    user: Annotated[User, Depends(get_current_user)],
     db: Annotated[Session, Depends(get_db)],
     file: UploadFile = File(...),
     palette_id: int = Form(...),
@@ -63,6 +64,14 @@ async def create_project(
     crop_json: str | None = Form(None),
     preprocess_json: str | None = Form(None),
 ):
+    parsed_crop_json = crop_json
+    if crop_json:
+        try:
+            crop = CropRect(**json.loads(crop_json))
+            parsed_crop_json = crop.model_dump_json()
+        except Exception as exc:
+            raise HTTPException(400, f"裁剪参数不合法: {exc}") from exc
+
     if canvas_w > settings.max_canvas_size or canvas_h > settings.max_canvas_size:
         raise HTTPException(400, f"画布最大 {settings.max_canvas_size}x{settings.max_canvas_size}")
     palette = db.get(Palette, palette_id)
@@ -77,7 +86,7 @@ async def create_project(
         source_image_path=path,
         canvas_w=canvas_w,
         canvas_h=canvas_h,
-        crop_json=crop_json,
+        crop_json=parsed_crop_json,
         preprocess_json=preprocess_json,
     )
     db.add(project)
@@ -87,7 +96,7 @@ async def create_project(
 
 
 @router.get("", response_model=list[ProjectOut])
-def list_projects(user: Annotated[User, Depends(get_current_or_guest_user)], db: Annotated[Session, Depends(get_db)]):
+def list_projects(user: Annotated[User, Depends(get_current_user)], db: Annotated[Session, Depends(get_db)]):
     items = db.query(Project).filter(Project.user_id == user.id).order_by(Project.created_at.desc()).all()
     return [_project_out(p) for p in items]
 
@@ -95,7 +104,7 @@ def list_projects(user: Annotated[User, Depends(get_current_or_guest_user)], db:
 @router.get("/{project_id}", response_model=ProjectOut)
 def get_project(
     project_id: int,
-    user: Annotated[User, Depends(get_current_or_guest_user)],
+    user: Annotated[User, Depends(get_current_user)],
     db: Annotated[Session, Depends(get_db)],
 ):
     return _project_out(_get_project(db, user, project_id))
@@ -105,7 +114,7 @@ def get_project(
 def update_project(
     project_id: int,
     body: ProjectUpdate,
-    user: Annotated[User, Depends(get_current_or_guest_user)],
+    user: Annotated[User, Depends(get_current_user)],
     db: Annotated[Session, Depends(get_db)],
 ):
     p = _get_project(db, user, project_id)
@@ -133,7 +142,7 @@ def update_project(
 def preview_preprocess(
     project_id: int,
     params: PreprocessParams,
-    user: Annotated[User, Depends(get_current_or_guest_user)],
+    user: Annotated[User, Depends(get_current_user)],
     db: Annotated[Session, Depends(get_db)],
 ):
     p = _get_project(db, user, project_id)
@@ -149,7 +158,7 @@ def preview_preprocess(
 def render_project(
     project_id: int,
     body: RenderRequest,
-    user: Annotated[User, Depends(get_current_or_guest_user)],
+    user: Annotated[User, Depends(get_current_user)],
     db: Annotated[Session, Depends(get_db)],
 ):
     p = _get_project(db, user, project_id)
@@ -161,7 +170,7 @@ def render_project(
 def batch_render(
     project_id: int,
     body: BatchRequest,
-    user: Annotated[User, Depends(get_current_or_guest_user)],
+    user: Annotated[User, Depends(get_current_user)],
     db: Annotated[Session, Depends(get_db)],
 ):
     p = _get_project(db, user, project_id)

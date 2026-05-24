@@ -55,7 +55,10 @@ export function getToken(): string | null {
 
 export function setToken(token: string) {
   localStorage.setItem(TOKEN_KEY, token);
-  localStorage.setItem(AUTH_MODE_KEY, USER_MODE);
+}
+
+export function setAuthMode(mode: typeof GUEST_MODE | typeof USER_MODE) {
+  localStorage.setItem(AUTH_MODE_KEY, mode);
 }
 
 export function clearToken() {
@@ -115,7 +118,11 @@ async function request<T>(
 export interface User {
   id: number;
   username: string;
-  email: string;
+  display_name: string;
+  role: string;
+  auth_provider: string;
+  is_guest: boolean;
+  created_at: string;
 }
 
 export interface PaletteColor {
@@ -190,6 +197,75 @@ export interface RenderResult {
   created_at: string;
 }
 
+export interface Work {
+  id: number;
+  user_id: number;
+  author_name: string;
+  title: string;
+  description: string | null;
+  image_url: string;
+  like_count: number;
+  comment_count: number;
+  status: string;
+  removed_reason: string | null;
+  created_at: string;
+  is_liked: boolean;
+}
+
+export interface WorkComment {
+  id: number;
+  work_id: number;
+  user_id: number;
+  author_name: string;
+  content: string;
+  status: string;
+  removed_reason: string | null;
+  created_at: string;
+}
+
+export interface Notice {
+  id: number;
+  category: string;
+  title: string;
+  content: string;
+  related_type: string | null;
+  related_id: number | null;
+  created_at: string;
+  is_read: boolean;
+}
+
+export interface LeaderboardItem {
+  user_id: number;
+  display_name: string;
+  likes: number;
+}
+
+export interface Announcement {
+  id: number;
+  admin_user_id: number;
+  title: string;
+  content: string;
+  created_at: string;
+}
+
+export interface ModerationLogItem {
+  id: number;
+  admin_user_id: number;
+  target_user_id: number;
+  target_type: string;
+  target_id: number;
+  action: string;
+  reason: string;
+  created_at: string;
+}
+
+function normalizeWork(work: Work): Work {
+  return {
+    ...work,
+    image_url: withApiOrigin(work.image_url) ?? work.image_url,
+  };
+}
+
 function normalizeProject(project: Project): Project {
   return {
     ...project,
@@ -206,33 +282,38 @@ function normalizeRenderResult(result: RenderResult): RenderResult {
 }
 
 export const api = {
-  register: (data: { username: string; password: string }) =>
-    request<User>("/api/auth/register", { method: "POST", body: JSON.stringify(data) }),
-
-  login: async (username: string, password: string) => {
-    const form = new URLSearchParams();
-    form.set("username", username);
-    form.set("password", password);
-    let res: Response;
-    try {
-      res = await fetch(apiUrl("/api/auth/login"), {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: form,
-      });
-    } catch (err) {
-      throw toFriendlyNetworkError(err);
-    }
-    if (!res.ok) {
-      const detail = await readErrorMessage(res, "登录失败");
-      throw new Error(detail);
-    }
-    const data = await res.json();
+  startGuestSession: async () => {
+    const data = await request<{ access_token: string; token_type: string; user: User }>("/api/auth/guest", {
+      method: "POST",
+    });
     setToken(data.access_token);
-    return data;
+    setAuthMode(GUEST_MODE);
+    return data.user;
+  },
+
+  loginWeiboPlaceholder: async () => {
+    const data = await request<{ access_token: string; token_type: string; user: User }>("/api/auth/weibo", {
+      method: "POST",
+      body: JSON.stringify({}),
+    });
+    setToken(data.access_token);
+    setAuthMode(USER_MODE);
+    return data.user;
   },
 
   me: () => request<User>("/api/auth/me"),
+
+  updateProfile: (displayName: string) =>
+    request<User>("/api/auth/profile", {
+      method: "PATCH",
+      body: JSON.stringify({ display_name: displayName }),
+    }),
+
+  upgradeAdmin: (inviteCode: string) =>
+    request<User>("/api/auth/upgrade-admin", {
+      method: "POST",
+      body: JSON.stringify({ invite_code: inviteCode }),
+    }),
 
   extractColors: async (files: File[], quality: ExtractQuality = "balanced") => {
     const fd = new FormData();
@@ -339,4 +420,41 @@ export const api = {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     });
   },
+
+  listWorks: async () => {
+    const works = await request<Work[]>("/api/community/works");
+    return works.map(normalizeWork);
+  },
+  publishWork: async (body: { result_id: number; title: string; description?: string }) =>
+    normalizeWork(await request<Work>("/api/community/works", { method: "POST", body: JSON.stringify(body) })),
+  getWork: async (workId: number) => normalizeWork(await request<Work>(`/api/community/works/${workId}`)),
+  listWorkComments: (workId: number) => request<WorkComment[]>(`/api/community/works/${workId}/comments`),
+  addWorkComment: (workId: number, content: string) =>
+    request<WorkComment>(`/api/community/works/${workId}/comments`, {
+      method: "POST",
+      body: JSON.stringify({ content }),
+    }),
+  likeWork: (workId: number) => request<{ ok: boolean; liked: boolean; like_count: number }>(`/api/community/works/${workId}/like`, { method: "POST" }),
+  unlikeWork: (workId: number) => request<{ ok: boolean; liked: boolean; like_count: number }>(`/api/community/works/${workId}/like`, { method: "DELETE" }),
+  getLikeLeaderboard: () => request<LeaderboardItem[]>("/api/community/leaderboard/likes"),
+  listNotices: () => request<Notice[]>("/api/community/notifications"),
+  readAllNotices: () => request<{ ok: boolean; count: number }>("/api/community/notifications/read-all", { method: "POST" }),
+  listAnnouncements: () => request<Announcement[]>("/api/community/announcements"),
+  createAnnouncement: (title: string, content: string) =>
+    request<Announcement>("/api/community/admin/announcements", {
+      method: "POST",
+      body: JSON.stringify({ title, content }),
+    }),
+  createAdminInviteCode: () => request<{ code: string; created_by: number }>("/api/community/admin/invite-codes", { method: "POST" }),
+  removeWork: (workId: number, reason: string) =>
+    request<{ ok: boolean }>(`/api/community/admin/works/${workId}/remove`, {
+      method: "POST",
+      body: JSON.stringify({ reason }),
+    }),
+  removeComment: (commentId: number, reason: string) =>
+    request<{ ok: boolean }>(`/api/community/admin/comments/${commentId}/remove`, {
+      method: "POST",
+      body: JSON.stringify({ reason }),
+    }),
+  listModerationLogs: () => request<ModerationLogItem[]>("/api/community/admin/moderation-logs"),
 };

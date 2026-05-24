@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -11,12 +11,22 @@ class User(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     username: Mapped[str] = mapped_column(String(64), unique=True, index=True)
-    email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
-    password_hash: Mapped[str] = mapped_column(String(255))
+    email: Mapped[str | None] = mapped_column(String(255), unique=True, index=True, nullable=True)
+    password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    display_name: Mapped[str] = mapped_column(String(64), default="游客")
+    auth_provider: Mapped[str] = mapped_column(String(16), default="guest")  # guest / weibo
+    role: Mapped[str] = mapped_column(String(16), default="user")  # user / admin
+    is_guest: Mapped[bool] = mapped_column(Boolean, default=True)
+    guest_session_id: Mapped[str | None] = mapped_column(String(64), unique=True, index=True, nullable=True)
+    weibo_id: Mapped[str | None] = mapped_column(String(128), unique=True, index=True, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     palettes: Mapped[list["Palette"]] = relationship(back_populates="user")
     projects: Mapped[list["Project"]] = relationship(back_populates="user")
+    works: Mapped[list["Work"]] = relationship(back_populates="user")
+    comments: Mapped[list["WorkComment"]] = relationship(back_populates="user")
+    likes: Mapped[list["WorkLike"]] = relationship(back_populates="user")
+    notifications: Mapped[list["Notification"]] = relationship(back_populates="user")
 
 
 class Palette(Base):
@@ -80,6 +90,7 @@ class RenderResult(Base):
 
     batch: Mapped["RenderBatch | None"] = relationship(back_populates="results")
     exports: Mapped[list["Export"]] = relationship(back_populates="result")
+    works: Mapped[list["Work"]] = relationship(back_populates="result")
 
 
 class Export(Base):
@@ -91,3 +102,105 @@ class Export(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     result: Mapped["RenderResult"] = relationship(back_populates="exports")
+
+
+class Work(Base):
+    __tablename__ = "works"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    result_id: Mapped[int] = mapped_column(ForeignKey("render_results.id"))
+    title: Mapped[str] = mapped_column(String(160))
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    image_url: Mapped[str] = mapped_column(String(512))
+    like_count: Mapped[int] = mapped_column(Integer, default=0)
+    comment_count: Mapped[int] = mapped_column(Integer, default=0)
+    status: Mapped[str] = mapped_column(String(16), default="published")  # published / removed
+    removed_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    user: Mapped["User"] = relationship(back_populates="works")
+    result: Mapped["RenderResult"] = relationship(back_populates="works")
+    comments: Mapped[list["WorkComment"]] = relationship(back_populates="work")
+    likes: Mapped[list["WorkLike"]] = relationship(back_populates="work")
+
+
+class WorkComment(Base):
+    __tablename__ = "work_comments"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    work_id: Mapped[int] = mapped_column(ForeignKey("works.id"), index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    content: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(16), default="published")
+    removed_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+    work: Mapped["Work"] = relationship(back_populates="comments")
+    user: Mapped["User"] = relationship(back_populates="comments")
+
+
+class WorkLike(Base):
+    __tablename__ = "work_likes"
+    __table_args__ = (UniqueConstraint("work_id", "user_id", name="uq_work_like"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    work_id: Mapped[int] = mapped_column(ForeignKey("works.id"), index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+    work: Mapped["Work"] = relationship(back_populates="likes")
+    user: Mapped["User"] = relationship(back_populates="likes")
+
+
+class Notification(Base):
+    __tablename__ = "notifications"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    category: Mapped[str] = mapped_column(String(32))
+    title: Mapped[str] = mapped_column(String(160))
+    content: Mapped[str] = mapped_column(Text)
+    related_type: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    related_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    is_read: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+    read_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    user: Mapped["User"] = relationship(back_populates="notifications")
+
+
+class Announcement(Base):
+    __tablename__ = "announcements"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    admin_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    title: Mapped[str] = mapped_column(String(160))
+    content: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+
+class ModerationLog(Base):
+    __tablename__ = "moderation_logs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    admin_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    target_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    target_type: Mapped[str] = mapped_column(String(32))
+    target_id: Mapped[int] = mapped_column(Integer, index=True)
+    action: Mapped[str] = mapped_column(String(32))
+    reason: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+
+class InviteCode(Base):
+    __tablename__ = "invite_codes"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    code: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    role_to_grant: Mapped[str] = mapped_column(String(16), default="admin")
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+    used_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

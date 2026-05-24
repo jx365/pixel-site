@@ -7,6 +7,9 @@ export default function ResultPage() {
   const [result, setResult] = useState<RenderResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
+  const [publishing, setPublishing] = useState(false);
+  const [publishTitle, setPublishTitle] = useState("");
+  const [publishDesc, setPublishDesc] = useState("");
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -17,6 +20,10 @@ export default function ResultPage() {
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
   }, [id]);
+
+  useEffect(() => {
+    if (result) setPublishTitle(`我的像素画 #${result.id}`);
+  }, [result?.id]);
 
   const downloadExcel = async () => {
     if (!id) return;
@@ -39,6 +46,24 @@ export default function ResultPage() {
       setError(e instanceof Error ? e.message : "导出失败");
     } finally {
       setExporting(false);
+    }
+  };
+
+  const publishToCommunity = async () => {
+    if (!id) return;
+    setPublishing(true);
+    setError("");
+    try {
+      await api.publishWork({
+        result_id: Number(id),
+        title: publishTitle.trim() || `我的像素画 #${id}`,
+        description: publishDesc.trim() || undefined,
+      });
+      setError("发布成功，可在社区广场查看。");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "发布失败");
+    } finally {
+      setPublishing(false);
     }
   };
 
@@ -76,6 +101,21 @@ export default function ResultPage() {
         <div className="actions">
           <button type="button" onClick={downloadExcel} disabled={exporting}>
             {exporting ? "导出中…" : "下载 Excel（色号格子 + 色卡对照表）"}
+          </button>
+        </div>
+        <hr style={{ margin: "1rem 0", borderColor: "var(--border)" }} />
+        <h3 style={{ marginTop: 0 }}>发布到社区</h3>
+        <div className="form-group">
+          <label>作品标题</label>
+          <input value={publishTitle} onChange={(e) => setPublishTitle(e.target.value)} />
+        </div>
+        <div className="form-group">
+          <label>作品描述</label>
+          <textarea value={publishDesc} onChange={(e) => setPublishDesc(e.target.value)} rows={3} />
+        </div>
+        <div className="actions">
+          <button type="button" className="secondary" onClick={publishToCommunity} disabled={publishing}>
+            {publishing ? "发布中…" : "发布作品"}
           </button>
         </div>
       </div>

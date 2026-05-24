@@ -16,6 +16,9 @@ class Settings(BaseSettings):
     max_canvas_size: int = 200
     max_batch_combinations: int = 50
     max_excel_cells: int = 40000
+    guest_daily_work_limit: int = 1
+    guest_daily_export_limit: int = 10
+    admin_invite_code: str = "HUASHI-ADMIN-2026"
 
     class Config:
         env_file = ".env"

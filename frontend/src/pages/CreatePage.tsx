@@ -188,7 +188,7 @@ export default function CreatePage() {
       {step === "crop" && previewUrl && (
         <div className="card">
           <p style={{ color: "var(--muted)", marginBottom: "0.85rem" }}>
-            拖拽裁剪框选择想要像素化的区域，比例会跟画布宽高保持一致。
+            拖拽裁剪框选择想要像素化的区域。即使不手动拖拽，也会按默认框提交裁剪范围。
           </p>
           <ImageCropper src={previewUrl} aspect={canvasW / canvasH} onChange={(c) => setCrop(c)} />
           <div className="actions">
@@ -233,7 +233,7 @@ export default function CreatePage() {
               <img src={project.source_image_url} alt="原图" style={{ maxWidth: "100%" }} />
             </div>
             <div>
-              <p style={{ marginBottom: "0.5rem", color: "var(--muted)" }}>预处理后</p>
+              <p style={{ marginBottom: "0.5rem", color: "var(--muted)" }}>裁剪+预处理后</p>
               {preprocessUrl ? (
                 <img src={preprocessUrl} alt="预处理" style={{ maxWidth: "100%" }} />
               ) : (
